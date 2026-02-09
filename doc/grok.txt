@@ -1,0 +1,190 @@
+*grok.txt*  Vim plugin for interfacing with grok-cli
+
+Author:  vim-grok contributors
+License: MIT
+
+==============================================================================
+CONTENTS                                                     *grok-contents*
+
+    1. Introduction .................... |grok-introduction|
+    2. Requirements .................... |grok-requirements|
+    3. Configuration ................... |grok-configuration|
+    4. Commands ........................ |grok-commands|
+    5. Key Mappings .................... |grok-mappings|
+    6. Chat Mode ....................... |grok-chat|
+    7. Tips ............................ |grok-tips|
+
+==============================================================================
+1. INTRODUCTION                                          *grok-introduction*
+
+vim-grok provides seamless integration between Vim and the grok-cli tool.
+It allows you to ask questions, explain code, generate code, perform code
+reviews, refactor, fix bugs, and have multi-turn chat conversations — all
+without leaving Vim.
+
+Responses stream asynchronously into a split buffer (Vim 8.0+ with
+|job| and |channel| support). A synchronous fallback is provided for
+older Vim builds.
+
+==============================================================================
+2. REQUIREMENTS                                          *grok-requirements*
+
+- Vim 8.0+ (for async streaming; synchronous fallback otherwise)
+- grok-cli installed and authenticated (`grok login`)
+- Default binary path: ~/.grok/bin/grok
+
+==============================================================================
+3. CONFIGURATION                                        *grok-configuration*
+
+                                                            *g:grok_binary*
+g:grok_binary ~
+    Path to the grok binary.
+    Default: `$HOME . '/.grok/bin/grok'`
+>
+    let g:grok_binary = '/usr/local/bin/grok'
+<
+
+                                                             *g:grok_model*
+g:grok_model ~
+    Model to use for all requests. Empty string uses CLI default.
+    Use `:GrokModels` to see available models.
+>
+    let g:grok_model = 'grok-code-fast-1'
+<
+
+                                                        *g:grok_extra_args*
+g:grok_extra_args ~
+    Additional CLI arguments appended to every grok invocation.
+>
+    let g:grok_extra_args = '--rules @~/.grok/my-rules.md'
+<
+
+                                                              *g:grok_yolo*
+g:grok_yolo ~
+    Enable YOLO mode (auto-approve all tool usage). Default: 0
+>
+    let g:grok_yolo = 1
+<
+
+                                                        *g:grok_map_prefix*
+g:grok_map_prefix ~
+    Key mapping prefix. Default: `'<leader>g'`
+>
+    let g:grok_map_prefix = '<leader>k'
+<
+
+==============================================================================
+4. COMMANDS                                                *grok-commands*
+
+                                                               *:GrokAsk*
+:GrokAsk {prompt} ~
+    Ask Grok any freeform question. Response appears in a split buffer
+    with async streaming.
+
+                                                           *:GrokExplain*
+:[range]GrokExplain ~
+    Explain the selected code (visual mode) or entire buffer.
+    Shows what the code does, key concepts, and notable patterns.
+
+                                                          *:GrokRefactor*
+:[range]GrokRefactor ~
+    Suggest refactoring improvements for selected code or entire buffer.
+    Shows improved code with explanations.
+
+                                                            *:GrokReview*
+:[range]GrokReview ~
+    Thorough code review covering bugs, security, performance,
+    readability, and best practices.
+
+                                                               *:GrokFix*
+:[range]GrokFix ~
+    Fix bugs and errors in selected code or entire buffer.
+    Returns corrected code with explanations.
+
+                                                          *:GrokGenerate*
+:GrokGenerate {prompt} ~
+    Generate code from a description and insert it at the cursor
+    position. Runs synchronously.
+
+                                                            *:GrokInline*
+:GrokInline {prompt} ~
+    Ask a question about the code around the cursor (±20 lines of
+    context). Includes file name and line number for precision.
+
+                                                            *:GrokModels*
+:GrokModels ~
+    List all available models in a split buffer.
+
+                                                          *:GrokSetModel*
+:GrokSetModel [model] ~
+    Set the model for the current session. With no argument, shows
+    the current model.
+
+                                                              *:GrokStop*
+:GrokStop ~
+    Cancel the currently running async Grok request.
+
+==============================================================================
+5. KEY MAPPINGS                                            *grok-mappings*
+
+All mappings use the prefix defined by |g:grok_map_prefix| (default:
+`<leader>g`).
+
+Normal mode: ~
+    `<leader>ga`   Ask Grok (opens command line for prompt)
+    `<leader>ge`   Explain entire buffer
+    `<leader>gr`   Refactor entire buffer
+    `<leader>gv`   Review entire buffer
+    `<leader>gf`   Fix entire buffer
+    `<leader>gg`   Generate code (opens command line for prompt)
+    `<leader>gc`   Chat with Grok (opens command line for message)
+    `<leader>gi`   Inline question about cursor context
+    `<leader>gm`   List available models
+    `<leader>gs`   Stop current request
+
+Visual mode: ~
+    `<leader>ge`   Explain selected code
+    `<leader>gr`   Refactor selected code
+    `<leader>gv`   Review selected code
+    `<leader>gf`   Fix selected code
+
+==============================================================================
+6. CHAT MODE                                                  *grok-chat*
+
+                                                              *:GrokChat*
+:GrokChat [message] ~
+    Multi-turn chat that preserves context via grok-cli session IDs.
+
+    Without arguments, opens a fresh chat buffer.
+    With a message, sends it and appends the response.
+
+    Each follow-up message continues the same conversation, so Grok
+    remembers all previous context in the session.
+
+                                                         *:GrokChatReset*
+:GrokChatReset ~
+    Reset the chat session. The next `:GrokChat` message starts a
+    new conversation.
+
+==============================================================================
+7. TIPS                                                      *grok-tips*
+
+- Use visual selection to operate on specific code blocks rather than
+  the entire buffer.
+
+- Chain commands: select code, `:GrokReview`, read feedback, then
+  `:GrokFix` to apply fixes.
+
+- Use `:GrokSetModel grok-code-fast-1` for faster responses during
+  iteration, or a more capable model for complex tasks.
+
+- Pass custom rules via `g:grok_extra_args`:
+>
+    let g:grok_extra_args = '--rules "Always respond in bullet points"'
+<
+
+- Output buffers use filetype `grok` with custom syntax highlighting
+  for thinking blocks, chat headers, and code blocks.
+
+==============================================================================
+vim:tw=78:ft=help:norl:

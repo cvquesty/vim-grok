@@ -1,0 +1,20 @@
+# Vim swap / backup / undo
+*.swp
+*.swo
+*~
+*.un~
+
+# Vim session & netrw
+.netrwhist
+Session.vim
+
+# Auto-generated help tags (users regenerate with :helptags)
+doc/tags
+
+# macOS
+.DS_Store
+._*
+
+# Archives (built artifacts)
+*.tar.gz
+*.zip
