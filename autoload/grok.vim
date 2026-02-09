@@ -166,6 +166,79 @@ function! s:run_grok_sync(prompt) abort
   return l:result
 endfunction
 
+" ---- Core: Async callback handlers (script-local to survive GC) ----------
+" The context dict is kept in s:grok_ctx so it cannot be garbage-collected
+" after s:run_grok_async returns.
+let s:grok_ctx = {}
+
+function! s:on_stdout(channel, msg) abort
+  let l:ctx = s:grok_ctx
+  for l:line in split(a:msg, "\n")
+    let l:trimmed = substitute(l:line, '^\s*\|\s*$', '', 'g')
+    if empty(l:trimmed)
+      continue
+    endif
+    try
+      let l:event = json_decode(l:trimmed)
+    catch
+      continue
+    endtry
+
+    if type(l:event) != type({})
+      continue
+    endif
+
+    let l:type = get(l:event, 'type', '')
+    let l:data = get(l:event, 'data', '')
+
+    if l:type ==# 'text'
+      let l:ctx.output .= l:data
+      call s:update_buffer(l:ctx.bufnr, l:ctx.output, l:ctx.thought)
+    elseif l:type ==# 'thought'
+      let l:ctx.thought .= l:data
+    elseif l:type ==# 'end'
+      let l:sid = get(l:event, 'sessionId', '')
+      if !empty(l:sid) && l:ctx.use_session
+        let s:chat_session_id = l:sid
+      endif
+    endif
+  endfor
+endfunction
+
+function! s:on_stderr(channel, msg) abort
+  let s:grok_ctx.stderr .= a:msg . "\n"
+endfunction
+
+function! s:on_close(channel) abort
+  let s:grok_ctx.channel_closed = 1
+  if s:grok_ctx.job_exited
+    call s:on_done()
+  endif
+endfunction
+
+function! s:on_exit(job, status) abort
+  let s:grok_ctx.exit_code = a:status
+  let s:grok_ctx.job_exited = 1
+  if s:grok_ctx.channel_closed
+    call s:on_done()
+  endif
+endfunction
+
+function! s:on_done() abort
+  let l:ctx = s:grok_ctx
+  if empty(l:ctx.output) && empty(l:ctx.thought)
+    if l:ctx.exit_code != 0
+      let l:ctx.output = 'Error: grok-cli exited with code ' . l:ctx.exit_code
+      if !empty(l:ctx.stderr)
+        let l:ctx.output .= "\n\n" . l:ctx.stderr
+      endif
+    endif
+  endif
+  call s:update_buffer(l:ctx.bufnr, l:ctx.output, l:ctx.thought)
+  echohl MoreMsg | echo 'Grok response complete.' | echohl None
+  let s:grok_job = v:null
+endfunction
+
 " ---- Core: Run grok asynchronously with streaming into a buffer -----------
 function! s:run_grok_async(prompt, bufnr, ...) abort
   let l:use_session = a:0 >= 1 ? a:1 : 0
@@ -177,84 +250,21 @@ function! s:run_grok_async(prompt, bufnr, ...) abort
     call extend(l:cmd, ['-s', s:chat_session_id])
   endif
 
-  let l:ctx = {
+  " Store context in script-local so it survives after this function returns
+  let s:grok_ctx = {
         \ 'bufnr': a:bufnr, 'output': '', 'use_session': l:use_session,
         \ 'thought': '', 'stderr': '', 'exit_code': -1,
         \ 'channel_closed': 0, 'job_exited': 0
         \ }
 
-  function! l:ctx.on_stdout(channel, msg) dict abort
-    " Each line is a JSON event from streaming-json
-    for l:line in split(a:msg, "\n")
-      let l:trimmed = substitute(l:line, '^\s*\|\s*$', '', 'g')
-      if empty(l:trimmed)
-        continue
-      endif
-      try
-        let l:event = json_decode(l:trimmed)
-      catch
-        continue
-      endtry
-
-      let l:type = get(l:event, 'type', '')
-      let l:data = get(l:event, 'data', '')
-
-      if l:type ==# 'text'
-        let self.output .= l:data
-        call s:update_buffer(self.bufnr, self.output, self.thought)
-      elseif l:type ==# 'thought'
-        let self.thought .= l:data
-      elseif l:type ==# 'end'
-        " Capture session ID for multi-turn chat
-        let l:sid = get(l:event, 'sessionId', '')
-        if !empty(l:sid) && self.use_session
-          let s:chat_session_id = l:sid
-        endif
-      endif
-    endfor
-  endfunction
-
-  function! l:ctx.on_stderr(channel, msg) dict abort
-    let self.stderr .= a:msg . "\n"
-  endfunction
-
-  function! l:ctx.on_close(channel) dict abort
-    let self.channel_closed = 1
-    if self.job_exited
-      call self.on_done()
-    endif
-  endfunction
-
-  function! l:ctx.on_exit(job, status) dict abort
-    let self.exit_code = a:status
-    let self.job_exited = 1
-    if self.channel_closed
-      call self.on_done()
-    endif
-  endfunction
-
-  " Called only after both channel close and job exit — all I/O is complete
-  function! l:ctx.on_done() dict abort
-    if empty(self.output) && empty(self.thought)
-      if self.exit_code != 0
-        let self.output = 'Error: grok-cli exited with code ' . self.exit_code
-        if !empty(self.stderr)
-          let self.output .= "\n\n" . self.stderr
-        endif
-      endif
-    endif
-    call s:update_buffer(self.bufnr, self.output, self.thought)
-    echohl MoreMsg | echo 'Grok response complete.' | echohl None
-    let s:grok_job = v:null
-  endfunction
-
-  " Start async job
+  " Start async job with script-local function references
   if has('job') && has('channel')
     let s:grok_job = job_start(l:cmd, {
-          \ 'out_cb': l:ctx.on_stdout,
-          \ 'err_cb': l:ctx.on_stderr,
-          \ 'close_cb': l:ctx.on_close,
-          \ 'exit_cb': l:ctx.on_exit,
+          \ 'in_io': 'null',
+          \ 'out_cb': function('s:on_stdout'),
+          \ 'err_cb': function('s:on_stderr'),
+          \ 'close_cb': function('s:on_close'),
+          \ 'exit_cb': function('s:on_exit'),
           \ 'out_mode': 'nl',
           \ 'err_mode': 'nl',
           \ })
