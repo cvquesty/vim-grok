@@ -101,3 +101,37 @@ execute 'xnoremap <silent> ' . s:prefix . 'v :GrokReview<CR>'
 
 " <leader>gf — Fix selection
 execute 'xnoremap <silent> ' . s:prefix . 'f :GrokFix<CR>'
+
+" ---- Inline Completion (xAI API) -----------------------------------------
+" g:grok_completion_enabled  — Set to 1 to enable (default: 0, opt-in)
+" g:grok_xai_api_key         — xAI API key (or set $XAI_API_KEY)
+" g:grok_completion_model    — Model for completions (default: grok-3-mini-fast)
+" g:grok_completion_debounce — Debounce delay in ms (default: 300)
+" g:grok_completion_max_tokens — Max tokens per completion (default: 256)
+" g:grok_completion_context_lines — Lines of context above/below cursor (default: 50)
+
+command! -nargs=0 GrokCompleteToggle call grok#completion#Toggle()
+
+" Default style for ghost text
+hi def GrokSuggestion guifg=#808080 ctermfg=244
+
+" Autocmds for triggering completions (only active when enabled)
+augroup grok_completion
+  autocmd!
+  autocmd TextChangedI * call grok#completion#Trigger()
+  autocmd InsertLeave  * call grok#completion#Clear()
+  autocmd BufLeave     * if mode() =~# '^[iR]' | call grok#completion#Clear() | endif
+augroup END
+
+" Key mappings for completion
+" Tab to accept (insert mode, expression map)
+if !get(g:, 'grok_completion_no_map_tab', 0) && !get(g:, 'grok_disable_completion_bindings', 0)
+  imap <script><silent><nowait><expr> <C-g><C-g> grok#completion#Accept()
+endif
+
+" Plug mappings for user customization
+imap <Plug>(grok-complete-accept)  <Cmd>call grok#completion#Accept()<CR>
+imap <Plug>(grok-complete-dismiss) <Cmd>call grok#completion#Clear()<CR>
+
+" <leader>gt — Toggle completion on/off
+execute 'nnoremap <silent> ' . s:prefix . 't :GrokCompleteToggle<CR>'
