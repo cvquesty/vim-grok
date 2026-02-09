@@ -129,7 +129,7 @@ function! s:run_grok_async(prompt, bufnr, ...) abort
     call extend(l:cmd, ['-s', s:chat_session_id])
   endif
 
-  let l:ctx = {'bufnr': a:bufnr, 'output': '', 'use_session': l:use_session, 'thought': ''}
+  let l:ctx = {'bufnr': a:bufnr, 'output': '', 'use_session': l:use_session, 'thought': '', 'stderr': ''}
 
   function! l:ctx.on_stdout(channel, msg) dict abort
     " Each line is a JSON event from streaming-json
@@ -162,11 +162,18 @@ function! s:run_grok_async(prompt, bufnr, ...) abort
     endfor
   endfunction
 
+  function! l:ctx.on_stderr(channel, msg) dict abort
+    let self.stderr .= a:msg . "\n"
+  endfunction
+
   function! l:ctx.on_exit(channel, code) dict abort
     " If no output was captured, show a meaningful message
     if empty(self.output) && empty(self.thought)
       if a:code != 0
         let self.output = 'Error: grok-cli exited with code ' . a:code
+        if !empty(self.stderr)
+          let self.output .= "\n\n" . self.stderr
+        endif
       endif
     endif
     call s:update_buffer(self.bufnr, self.output, self.thought)
@@ -180,8 +187,10 @@ function! s:run_grok_async(prompt, bufnr, ...) abort
   if has('job') && has('channel')
     let s:grok_job = job_start(l:cmd, {
           \ 'out_cb': l:ctx.on_stdout,
+          \ 'err_cb': l:ctx.on_stderr,
           \ 'exit_cb': l:ctx.on_exit,
           \ 'out_mode': 'nl',
+          \ 'err_mode': 'nl',
           \ })
   else
     " Fallback: synchronous
@@ -244,12 +253,8 @@ function! grok#ask(prompt) abort
 endfunction
 
 " ---- :GrokExplain (visual selection or entire buffer) ---------------------
-function! grok#explain(line1, line2, range) abort
-  if a:range > 0
-    let l:code = join(getline(a:line1, a:line2), "\n")
-  else
-    let l:code = join(getline(1, '$'), "\n")
-  endif
+function! grok#explain(line1, line2) abort
+  let l:code = join(getline(a:line1, a:line2), "\n")
   let l:ft = &filetype
   let l:prompt = "Explain the following " . l:ft . " code clearly and concisely. " .
         \ "Include what it does, key concepts, and any notable patterns:\n\n```" . l:ft . "\n" . l:code . "\n```"
@@ -259,12 +264,8 @@ function! grok#explain(line1, line2, range) abort
 endfunction
 
 " ---- :GrokRefactor (visual selection or entire buffer) --------------------
-function! grok#refactor(line1, line2, range) abort
-  if a:range > 0
-    let l:code = join(getline(a:line1, a:line2), "\n")
-  else
-    let l:code = join(getline(1, '$'), "\n")
-  endif
+function! grok#refactor(line1, line2) abort
+  let l:code = join(getline(a:line1, a:line2), "\n")
   let l:ft = &filetype
   let l:prompt = "Suggest refactoring improvements for this " . l:ft . " code. " .
         \ "Show the improved code with explanations of each change:\n\n```" . l:ft . "\n" . l:code . "\n```"
@@ -274,12 +275,8 @@ function! grok#refactor(line1, line2, range) abort
 endfunction
 
 " ---- :GrokReview (visual selection or entire buffer) ----------------------
-function! grok#review(line1, line2, range) abort
-  if a:range > 0
-    let l:code = join(getline(a:line1, a:line2), "\n")
-  else
-    let l:code = join(getline(1, '$'), "\n")
-  endif
+function! grok#review(line1, line2) abort
+  let l:code = join(getline(a:line1, a:line2), "\n")
   let l:ft = &filetype
   let l:prompt = "Perform a thorough code review of this " . l:ft . " code. " .
         \ "Cover: bugs, security issues, performance, readability, best practices. " .
@@ -290,12 +287,8 @@ function! grok#review(line1, line2, range) abort
 endfunction
 
 " ---- :GrokFix (visual selection or entire buffer) -------------------------
-function! grok#fix(line1, line2, range) abort
-  if a:range > 0
-    let l:code = join(getline(a:line1, a:line2), "\n")
-  else
-    let l:code = join(getline(1, '$'), "\n")
-  endif
+function! grok#fix(line1, line2) abort
+  let l:code = join(getline(a:line1, a:line2), "\n")
   let l:ft = &filetype
   let l:prompt = "Fix any bugs, errors, or issues in this " . l:ft . " code. " .
         \ "Return the corrected code with explanations of what was wrong:\n\n```" . l:ft . "\n" . l:code . "\n```"
