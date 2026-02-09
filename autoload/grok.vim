@@ -99,10 +99,20 @@ function! s:get_visual_selection() abort
   return join(l:lines, "\n")
 endfunction
 
+" ---- Utility: Find a buffer by exact name (avoids glob pattern pitfalls) --
+function! s:find_buf_exact(name) abort
+  for l:i in range(1, bufnr('$'))
+    if bufexists(l:i) && bufname(l:i) ==# a:name
+      return l:i
+    endif
+  endfor
+  return -1
+endfunction
+
 " ---- Utility: Open or reuse a Grok output buffer --------------------------
 function! s:open_grok_buffer(name) abort
   let l:bufname = '[Grok] ' . a:name
-  let l:existing = bufnr(l:bufname)
+  let l:existing = s:find_buf_exact(l:bufname)
   if l:existing != -1 && bufloaded(l:existing)
     " Jump to the window if visible, otherwise split
     let l:winnr = bufwinnr(l:existing)
@@ -165,7 +175,11 @@ function! s:run_grok_async(prompt, bufnr, ...) abort
     call extend(l:cmd, ['-s', s:chat_session_id])
   endif
 
-  let l:ctx = {'bufnr': a:bufnr, 'output': '', 'use_session': l:use_session, 'thought': '', 'stderr': ''}
+  let l:ctx = {
+        \ 'bufnr': a:bufnr, 'output': '', 'use_session': l:use_session,
+        \ 'thought': '', 'stderr': '', 'exit_code': -1,
+        \ 'channel_closed': 0, 'job_exited': 0
+        \ }
 
   function! l:ctx.on_stdout(channel, msg) dict abort
     " Each line is a JSON event from streaming-json
@@ -202,18 +216,32 @@ function! s:run_grok_async(prompt, bufnr, ...) abort
     let self.stderr .= a:msg . "\n"
   endfunction
 
-  function! l:ctx.on_exit(channel, code) dict abort
-    " If no output was captured, show a meaningful message
+  function! l:ctx.on_close(channel) dict abort
+    let self.channel_closed = 1
+    if self.job_exited
+      call self.on_done()
+    endif
+  endfunction
+
+  function! l:ctx.on_exit(job, status) dict abort
+    let self.exit_code = a:status
+    let self.job_exited = 1
+    if self.channel_closed
+      call self.on_done()
+    endif
+  endfunction
+
+  " Called only after both channel close and job exit — all I/O is complete
+  function! l:ctx.on_done() dict abort
     if empty(self.output) && empty(self.thought)
-      if a:code != 0
-        let self.output = 'Error: grok-cli exited with code ' . a:code
+      if self.exit_code != 0
+        let self.output = 'Error: grok-cli exited with code ' . self.exit_code
         if !empty(self.stderr)
           let self.output .= "\n\n" . self.stderr
         endif
       endif
     endif
     call s:update_buffer(self.bufnr, self.output, self.thought)
-    " Mark buffer as not modified
     call setbufvar(self.bufnr, '&modified', 0)
     echohl MoreMsg | echo 'Grok response complete.' | echohl None
     let s:grok_job = v:null
@@ -224,6 +252,7 @@ function! s:run_grok_async(prompt, bufnr, ...) abort
     let s:grok_job = job_start(l:cmd, {
           \ 'out_cb': l:ctx.on_stdout,
           \ 'err_cb': l:ctx.on_stderr,
+          \ 'close_cb': l:ctx.on_close,
           \ 'exit_cb': l:ctx.on_exit,
           \ 'out_mode': 'nl',
           \ 'err_mode': 'nl',
@@ -359,7 +388,7 @@ endfunction
 " ---- :GrokChat -----------------------------------------------------------
 function! grok#chat(prompt) abort
   let l:bufname = '[Grok] Chat'
-  let l:existing = bufnr(l:bufname)
+  let l:existing = s:find_buf_exact(l:bufname)
 
   if empty(a:prompt)
     " Open a new chat session
