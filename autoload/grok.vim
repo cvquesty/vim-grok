@@ -110,6 +110,8 @@ function! s:find_buf_exact(name) abort
 endfunction
 
 " ---- Utility: Open or reuse a Grok output buffer --------------------------
+" Uses noautocmd for all window operations to prevent other plugins
+" (airline, gitgutter, codeium, etc.) from interfering during setup.
 function! s:open_grok_buffer(name) abort
   let l:bufname = '[Grok] ' . a:name
   let l:existing = s:find_buf_exact(l:bufname)
@@ -117,17 +119,17 @@ function! s:open_grok_buffer(name) abort
     " Jump to the window if visible, otherwise split
     let l:winnr = bufwinnr(l:existing)
     if l:winnr != -1
-      execute l:winnr . 'wincmd w'
+      noautocmd execute l:winnr . 'wincmd w'
     else
-      execute 'botright split'
-      execute 'buffer ' . l:existing
+      noautocmd execute 'botright split'
+      noautocmd execute 'buffer ' . l:existing
     endif
     " Clear the buffer
     setlocal modifiable
     silent %delete _
   else
-    execute 'botright new'
-    execute 'file ' . fnameescape(l:bufname)
+    noautocmd execute 'botright new'
+    noautocmd execute 'file ' . fnameescape(l:bufname)
   endif
   setlocal buftype=nofile bufhidden=hide noswapfile
   setlocal filetype=grok
@@ -242,7 +244,6 @@ function! s:run_grok_async(prompt, bufnr, ...) abort
       endif
     endif
     call s:update_buffer(self.bufnr, self.output, self.thought)
-    call setbufvar(self.bufnr, '&modified', 0)
     echohl MoreMsg | echo 'Grok response complete.' | echohl None
     let s:grok_job = v:null
   endfunction
@@ -272,14 +273,16 @@ function! s:run_grok_async(prompt, bufnr, ...) abort
 endfunction
 
 " ---- Utility: Update buffer content with thought + response ---------------
+" Uses buffer-level operations to avoid triggering autocmds from other
+" plugins (airline, gitgutter, auto-pairs, codeium, etc.) that fire on
+" WinEnter/BufEnter and can corrupt window state during async callbacks.
 function! s:update_buffer(bufnr, text, thought) abort
   let l:winnr = bufwinnr(a:bufnr)
   if l:winnr == -1
     return
   endif
-  let l:cur_win = winnr()
-  execute l:winnr . 'wincmd w'
-  setlocal modifiable
+
+  " Build the new content
   let l:lines = []
   if !empty(a:thought)
     call add(l:lines, '╭─ Thinking ─────────────────────────────────────')
@@ -288,17 +291,25 @@ function! s:update_buffer(bufnr, text, thought) abort
     call add(l:lines, '')
   endif
   call extend(l:lines, split(a:text, "\n"))
-  " Clear old buffer content (spinner, stale lines) before writing
-  silent 1,$delete _
   if empty(l:lines)
-    call setbufline(a:bufnr, 1, ['(No response received)'])
-  else
-    call setbufline(a:bufnr, 1, l:lines)
+    let l:lines = ['(No response received)']
   endif
-  " Scroll to bottom
-  normal! G
-  setlocal nomodifiable
-  execute l:cur_win . 'wincmd w'
+
+  " Make buffer writable, update content, then lock it — all without
+  " switching windows so BufEnter/WinEnter autocmds never fire.
+  call setbufvar(a:bufnr, '&modifiable', 1)
+  " Clear existing lines
+  silent call deletebufline(a:bufnr, 1, '$')
+  " Write new content
+  call setbufline(a:bufnr, 1, l:lines)
+  call setbufvar(a:bufnr, '&modifiable', 0)
+  call setbufvar(a:bufnr, '&modified', 0)
+
+  " Scroll to bottom using noautocmd to prevent plugin interference
+  let l:cur_win = winnr()
+  noautocmd execute l:winnr . 'wincmd w'
+  noautocmd normal! G
+  noautocmd execute l:cur_win . 'wincmd w'
   redraw
 endfunction
 
@@ -414,10 +425,10 @@ function! grok#chat(prompt) abort
   if l:existing != -1 && bufloaded(l:existing)
     let l:winnr = bufwinnr(l:existing)
     if l:winnr != -1
-      execute l:winnr . 'wincmd w'
+      noautocmd execute l:winnr . 'wincmd w'
     else
-      execute 'botright split'
-      execute 'buffer ' . l:existing
+      noautocmd execute 'botright split'
+      noautocmd execute 'buffer ' . l:existing
     endif
     setlocal modifiable
     let l:last = line('$')
@@ -460,7 +471,7 @@ function! grok#chat(prompt) abort
   " Replace the "Thinking..." line with the response
   let l:winnr2 = bufwinnr(l:bufnr)
   if l:winnr2 != -1
-    execute l:winnr2 . 'wincmd w'
+    noautocmd execute l:winnr2 . 'wincmd w'
   endif
   setlocal modifiable
   " Find and remove the spinner line
