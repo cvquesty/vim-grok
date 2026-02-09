@@ -14,7 +14,7 @@
 ### [vim-plug](https://github.com/junegunn/vim-plug)
 
 ```vim
-Plug 'YOUR_GITHUB_USER/vim-grok'
+Plug 'xai-org/vim-grok'
 ```
 
 Then `:PlugInstall`.
@@ -22,7 +22,7 @@ Then `:PlugInstall`.
 ### [Vundle](https://github.com/VundleVim/Vundle.vim)
 
 ```vim
-Plugin 'YOUR_GITHUB_USER/vim-grok'
+Plugin 'xai-org/vim-grok'
 ```
 
 Then `:PluginInstall`.
@@ -31,7 +31,7 @@ Then `:PluginInstall`.
 
 ```bash
 cd ~/.vim/bundle
-git clone https://github.com/YOUR_GITHUB_USER/vim-grok.git
+git clone https://github.com/xai-org/vim-grok.git
 ```
 
 ### Vim 8+ Native Packages
@@ -39,7 +39,7 @@ git clone https://github.com/YOUR_GITHUB_USER/vim-grok.git
 ```bash
 mkdir -p ~/.vim/pack/plugins/start
 cd ~/.vim/pack/plugins/start
-git clone https://github.com/YOUR_GITHUB_USER/vim-grok.git
+git clone https://github.com/xai-org/vim-grok.git
 ```
 
 ### Neovim
@@ -47,7 +47,7 @@ git clone https://github.com/YOUR_GITHUB_USER/vim-grok.git
 ```bash
 mkdir -p ~/.local/share/nvim/site/pack/plugins/start
 cd ~/.local/share/nvim/site/pack/plugins/start
-git clone https://github.com/YOUR_GITHUB_USER/vim-grok.git
+git clone https://github.com/xai-org/vim-grok.git
 ```
 
 After installing, generate help tags inside Vim:
@@ -55,9 +55,6 @@ After installing, generate help tags inside Vim:
 ```vim
 :helptags ALL
 ```
-
-> **Note:** Replace `YOUR_GITHUB_USER` above with the actual GitHub org or
-> username once the repo is published.
 
 ## Quick Start
 
