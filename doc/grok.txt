@@ -55,8 +55,10 @@ g:grok_model ~
                                                         *g:grok_extra_args*
 g:grok_extra_args ~
     Additional CLI arguments appended to every grok invocation.
+    Accepts a String (with shell-style quoting) or a List.
 >
-    let g:grok_extra_args = '--rules @~/.grok/my-rules.md'
+    let g:grok_extra_args = '--rules "Be concise"'
+    let g:grok_extra_args = ['--rules', 'Be concise']
 <
 
                                                               *g:grok_yolo*

@@ -131,8 +131,11 @@ let g:grok_binary = '~/.grok/bin/grok'
 " Default model (empty = CLI default)
 let g:grok_model = 'grok-code-fast-1'
 
-" Extra CLI arguments
+" Extra CLI arguments (string with shell-style quoting)
 let g:grok_extra_args = '--rules "Be concise"'
+
+" Or as a List (avoids quoting issues)
+let g:grok_extra_args = ['--rules', 'Be concise']
 
 " Enable YOLO mode (auto-approve tool usage)
 let g:grok_yolo = 0

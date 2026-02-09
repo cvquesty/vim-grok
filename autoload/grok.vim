@@ -32,6 +32,40 @@ endfunction
 let s:chat_session_id = ''
 let s:grok_job = v:null
 
+" ---- Utility: Shell-like string splitting (respects quotes) ---------------
+function! s:shellsplit(str) abort
+  let l:args = []
+  let l:current = ''
+  let l:in_quote = ''
+  let l:i = 0
+  while l:i < len(a:str)
+    let l:c = a:str[l:i]
+    if empty(l:in_quote)
+      if l:c ==# '"' || l:c ==# "'"
+        let l:in_quote = l:c
+      elseif l:c ==# ' ' || l:c ==# "\t"
+        if !empty(l:current)
+          call add(l:args, l:current)
+          let l:current = ''
+        endif
+      else
+        let l:current .= l:c
+      endif
+    else
+      if l:c ==# l:in_quote
+        let l:in_quote = ''
+      else
+        let l:current .= l:c
+      endif
+    endif
+    let l:i += 1
+  endwhile
+  if !empty(l:current)
+    call add(l:args, l:current)
+  endif
+  return l:args
+endfunction
+
 " ---- Utility: Build the base command list ---------------------------------
 function! s:base_cmd() abort
   let l:cmd = [s:get_binary()]
@@ -43,8 +77,10 @@ function! s:base_cmd() abort
     call add(l:cmd, '--yolo')
   endif
   let l:extra = s:get_extra_args()
-  if !empty(l:extra)
-    call extend(l:cmd, split(l:extra))
+  if type(l:extra) == type([])
+    call extend(l:cmd, l:extra)
+  elseif type(l:extra) == type('') && !empty(l:extra)
+    call extend(l:cmd, s:shellsplit(l:extra))
   endif
   return l:cmd
 endfunction
