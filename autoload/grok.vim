@@ -163,6 +163,12 @@ function! s:run_grok_async(prompt, bufnr, ...) abort
   endfunction
 
   function! l:ctx.on_exit(channel, code) dict abort
+    " If no output was captured, show a meaningful message
+    if empty(self.output) && empty(self.thought)
+      if a:code != 0
+        let self.output = 'Error: grok-cli exited with code ' . a:code
+      endif
+    endif
     call s:update_buffer(self.bufnr, self.output, self.thought)
     " Mark buffer as not modified
     call setbufvar(self.bufnr, '&modified', 0)
@@ -175,7 +181,7 @@ function! s:run_grok_async(prompt, bufnr, ...) abort
     let s:grok_job = job_start(l:cmd, {
           \ 'out_cb': l:ctx.on_stdout,
           \ 'exit_cb': l:ctx.on_exit,
-          \ 'out_mode': 'raw',
+          \ 'out_mode': 'nl',
           \ })
   else
     " Fallback: synchronous
@@ -208,7 +214,13 @@ function! s:update_buffer(bufnr, text, thought) abort
     call add(l:lines, '')
   endif
   call extend(l:lines, split(a:text, "\n"))
-  call setbufline(a:bufnr, 1, l:lines)
+  " Clear old buffer content (spinner, stale lines) before writing
+  silent 1,$delete _
+  if empty(l:lines)
+    call setbufline(a:bufnr, 1, ['(No response received)'])
+  else
+    call setbufline(a:bufnr, 1, l:lines)
+  endif
   " Scroll to bottom
   normal! G
   setlocal nomodifiable
