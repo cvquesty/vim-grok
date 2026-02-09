@@ -1,4 +1,4 @@
-*grok.txt*  Vim plugin for interfacing with grok-cli
+*grok.txt*  Vim plugin for interfacing with grok-cli and the xAI API
 
 Author:  vim-grok contributors
 License: MIT
@@ -8,20 +8,28 @@ CONTENTS                                                     *grok-contents*
 
     1. Introduction .................... |grok-introduction|
     2. Requirements .................... |grok-requirements|
-    3. Configuration ................... |grok-configuration|
-    4. Commands ........................ |grok-commands|
-    5. Key Mappings .................... |grok-mappings|
-    6. Inline Completion ............... |grok-completion|
-    7. Chat Mode ....................... |grok-chat|
-    8. Tips ............................ |grok-tips|
+    3. Installation .................... |grok-installation|
+    4. Configuration ................... |grok-configuration|
+    5. Commands ........................ |grok-commands|
+    6. Key Mappings .................... |grok-mappings|
+    7. Inline Completion ............... |grok-completion|
+    8. Chat Mode ....................... |grok-chat|
+    9. Tips ............................ |grok-tips|
 
 ==============================================================================
 1. INTRODUCTION                                          *grok-introduction*
 
-vim-grok provides seamless integration between Vim and the grok-cli tool.
-It allows you to ask questions, explain code, generate code, perform code
-reviews, refactor, fix bugs, and have multi-turn chat conversations — all
-without leaving Vim.
+vim-grok provides two layers of AI-powered code assistance:
+
+1. **grok-cli integration** — Ask questions, explain / refactor / review /
+   fix code, generate snippets, and hold multi-turn chat sessions via the
+   grok-cli command-line tool. Requires `grok login` only — no API key.
+
+2. **Inline completions** — Ghost-text code suggestions as you type
+   (similar to GitHub Copilot or Codeium), powered by the xAI API
+   directly. Requires an xAI API key.
+
+Both features run asynchronously and do not block the editor.
 
 Responses stream asynchronously into a split buffer (Vim 8.0+ with
 |job| and |channel| support). A synchronous fallback is provided for
@@ -30,12 +38,59 @@ older Vim builds.
 ==============================================================================
 2. REQUIREMENTS                                          *grok-requirements*
 
+Common: ~
 - Vim 8.0+ (for async streaming; synchronous fallback otherwise)
+
+For grok-cli commands: ~
 - grok-cli installed and authenticated (`grok login`)
 - Default binary path: ~/.grok/bin/grok
 
+For inline completions (optional): ~
+- An xAI API key (get one at https://console.x.ai/)
+- `curl` available on your system PATH
+
 ==============================================================================
-3. CONFIGURATION                                        *grok-configuration*
+3. INSTALLATION                                          *grok-installation*
+
+vim-plug: ~
+>
+    Plug 'xai-org/vim-grok'
+<
+    Then `:PlugInstall`.
+
+Vundle: ~
+>
+    Plugin 'xai-org/vim-grok'
+<
+    Then `:PluginInstall`.
+
+Pathogen: ~
+>
+    cd ~/.vim/bundle
+    git clone https://github.com/xai-org/vim-grok.git
+<
+
+Vim 8+ native packages: ~
+>
+    mkdir -p ~/.vim/pack/plugins/start
+    cd ~/.vim/pack/plugins/start
+    git clone https://github.com/xai-org/vim-grok.git
+<
+
+Neovim: ~
+>
+    mkdir -p ~/.local/share/nvim/site/pack/plugins/start
+    cd ~/.local/share/nvim/site/pack/plugins/start
+    git clone https://github.com/xai-org/vim-grok.git
+<
+
+After installing, generate help tags: ~
+>
+    :helptags ALL
+<
+
+==============================================================================
+4. CONFIGURATION                                        *grok-configuration*
 
                                                             *g:grok_binary*
 g:grok_binary ~
@@ -123,7 +178,7 @@ g:grok_completion_context_lines ~
 <
 
 ==============================================================================
-4. COMMANDS                                                *grok-commands*
+5. COMMANDS                                                *grok-commands*
 
                                                                *:GrokAsk*
 :GrokAsk {prompt} ~
@@ -178,7 +233,7 @@ g:grok_completion_context_lines ~
     Toggle inline code completions on or off.
 
 ==============================================================================
-5. KEY MAPPINGS                                            *grok-mappings*
+6. KEY MAPPINGS                                            *grok-mappings*
 
 All mappings use the prefix defined by |g:grok_map_prefix| (default:
 `<leader>g`).
@@ -203,31 +258,67 @@ Visual mode: ~
     `<leader>gf`   Fix selected code
 
 ==============================================================================
-6. INLINE COMPLETION                                     *grok-completion*
+7. INLINE COMPLETION                                     *grok-completion*
 
 vim-grok can provide inline code suggestions (ghost text) as you type,
 similar to GitHub Copilot or Codeium. This feature calls the xAI API
-directly via `curl` (not grok-cli).
+directly via `curl` (not grok-cli) and runs completely asynchronously.
 
-Setup: ~
+                                                   *grok-completion-setup*
+Setup (3 steps): ~
 
-1. Get an API key at https://console.x.ai/
-2. Add to your .vimrc:
+Step 1: Get an API key ~
+
+    Sign up or log in at https://console.x.ai/ and create an API key.
+    Keys start with `xai-`.
+
+Step 2: Export the key ~
+
+    Add the key to your shell profile so Vim can read it from the
+    environment. Choose the file that matches your shell:
+
+    For bash (~/.bash_profile or ~/.bashrc): ~
 >
-    let g:grok_completion_enabled = 1
-    let g:grok_xai_api_key = 'xai-...'
+        export XAI_API_KEY='xai-your-key-here'
 <
-   Or set the environment variable `$XAI_API_KEY`.
+    For zsh (~/.zshrc): ~
+>
+        export XAI_API_KEY='xai-your-key-here'
+<
+    After editing, reload your shell:
+>
+        source ~/.bash_profile      # bash
+        source ~/.zshrc             # zsh
+<
+    Alternatively, set the key directly in your .vimrc (less secure,
+    since the key is in plain text):
+>
+        let g:grok_xai_api_key = 'xai-your-key-here'
+<
+    The plugin checks |g:grok_xai_api_key| first, then falls back to
+    the `$XAI_API_KEY` environment variable.
 
-How it works: ~
+Step 3: Enable in .vimrc ~
 
-- On each keystroke in Insert mode (debounced by 300ms), the plugin
-  sends ~50 lines of context around your cursor to the xAI API.
-- The API returns a code completion, rendered as grey ghost text
-  after your cursor using Vim's |text-properties|.
-- Press `<C-g><C-g>` to accept the suggestion.
-- Ghost text is cleared automatically when you leave Insert mode,
-  change buffers, or keep typing.
+    Add this line to your ~/.vimrc:
+>
+        let g:grok_completion_enabled = 1
+<
+    Restart Vim. Open any code file, enter Insert mode, and start
+    typing. After a brief pause (300ms default), a grey ghost-text
+    suggestion will appear after your cursor.
+
+                                                *grok-completion-keymaps*
+How to use: ~
+
+- **Type normally** in Insert mode. Suggestions appear automatically
+  after a brief pause.
+- **`<C-g><C-g>`** — Accept the suggestion (inserts the ghost text).
+- **Keep typing** — The suggestion is dismissed and a new one is
+  requested.
+- **Leave Insert mode** — Suggestions are cleared automatically.
+- **`:GrokCompleteToggle`** or **`<leader>gt`** — Turn completions
+  on/off without editing your .vimrc.
 
 Insert-mode mappings: ~
 
@@ -244,10 +335,24 @@ Example: remap Tab to accept: ~
 Disabling for specific filetypes: ~
 >
     autocmd FileType markdown let b:grok_completion_enabled = 0
+    autocmd FileType text     let b:grok_completion_enabled = 0
+    autocmd FileType help     let b:grok_completion_enabled = 0
+<
+
+                                               *grok-completion-example*
+Example .vimrc (complete setup): ~
+>
+    " grok-cli commands (uses grok login auth, no API key needed)
+    let g:grok_model = 'grok-code-fast-1'
+    let g:grok_map_prefix = '<leader>g'
+    let g:grok_extra_args = '--rules "Be concise"'
+
+    " Inline completions (requires $XAI_API_KEY in environment)
+    let g:grok_completion_enabled = 1
 <
 
 ==============================================================================
-7. CHAT MODE                                                  *grok-chat*
+8. CHAT MODE                                                  *grok-chat*
 
                                                               *:GrokChat*
 :GrokChat [message] ~
@@ -265,7 +370,7 @@ Disabling for specific filetypes: ~
     new conversation.
 
 ==============================================================================
-8. TIPS                                                      *grok-tips*
+9. TIPS                                                      *grok-tips*
 
 - Use visual selection to operate on specific code blocks rather than
   the entire buffer.

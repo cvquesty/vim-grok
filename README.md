@@ -60,6 +60,10 @@ After installing, generate help tags inside Vim:
 
 ## Quick Start
 
+### grok-cli commands (no API key needed)
+
+These work out of the box once grok-cli is installed and authenticated:
+
 ```vim
 " Ask any freeform question
 :GrokAsk How do I reverse a linked list in Python?
@@ -76,6 +80,38 @@ After installing, generate help tags inside Vim:
 " Start a multi-turn chat
 :GrokChat What testing framework should I use for this project?
 ```
+
+### Inline completions (requires xAI API key)
+
+To enable ghost-text suggestions as you type:
+
+**1. Get an API key** from [console.x.ai](https://console.x.ai/)
+
+**2. Export the key** in your shell profile (`~/.bash_profile`, `~/.bashrc`,
+or `~/.zshrc`):
+
+```bash
+export XAI_API_KEY='xai-your-key-here'
+```
+
+Then reload your shell: `source ~/.bash_profile`
+
+**3. Enable in your `.vimrc`:**
+
+```vim
+let g:grok_completion_enabled = 1
+```
+
+That's it. Restart Vim, open a code file, enter Insert mode, and start
+typing. After a brief pause (300ms), a grey ghost-text suggestion will
+appear. Press **`Ctrl-g Ctrl-g`** to accept it.
+
+> **Tip:** You can also set the key directly in your `.vimrc` instead of
+> using an environment variable:
+> ```vim
+> let g:grok_xai_api_key = 'xai-your-key-here'
+> ```
+> However, using `$XAI_API_KEY` keeps the secret out of your dotfiles.
 
 ## Commands
 
@@ -124,7 +160,15 @@ All mappings use the prefix `<leader>g` (configurable via `g:grok_map_prefix`).
 | `<leader>gv` | Review selection |
 | `<leader>gf` | Fix selection |
 
+### Insert Mode (Inline Completion)
+
+| Key | Action |
+|-----|--------|
+| `<C-g><C-g>` | Accept ghost-text suggestion |
+
 ## Configuration
+
+### grok-cli Settings
 
 Add any of these to your `.vimrc`:
 
@@ -148,17 +192,35 @@ let g:grok_yolo = 0
 let g:grok_map_prefix = '<leader>g'
 ```
 
-### Inline Completion (xAI API)
+### Inline Completion Settings
 
 Inline completions show ghost-text suggestions as you type, similar to
-Copilot or Codeium. They call the xAI API directly (not grok-cli).
+GitHub Copilot or Codeium. They call the xAI API directly (not grok-cli)
+and require an API key.
+
+#### API Key Setup
+
+Option A — Environment variable (recommended):
+
+```bash
+# Add to ~/.bash_profile, ~/.bashrc, or ~/.zshrc
+export XAI_API_KEY='xai-your-key-here'
+```
+
+Option B — Vim variable:
+
+```vim
+" Add to ~/.vimrc (less secure — key is in plain text)
+let g:grok_xai_api_key = 'xai-your-key-here'
+```
+
+The plugin checks `g:grok_xai_api_key` first, then falls back to `$XAI_API_KEY`.
+
+#### Completion Options
 
 ```vim
 " Enable inline completions (default: 0, opt-in)
 let g:grok_completion_enabled = 1
-
-" xAI API key (or set the XAI_API_KEY environment variable)
-let g:grok_xai_api_key = 'xai-...'
 
 " Model for completions (default: grok-3-mini-fast)
 let g:grok_completion_model = 'grok-3-mini-fast'
@@ -172,38 +234,76 @@ let g:grok_completion_max_tokens = 256
 " Lines of context above/below cursor sent with each request (default: 50)
 let g:grok_completion_context_lines = 50
 
-" Disable default Ctrl-g Ctrl-g accept mapping
-let g:grok_completion_no_map_tab = 1
+" xAI API endpoint (default: https://api.x.ai/v1/chat/completions)
+let g:grok_xai_api_url = 'https://api.x.ai/v1/chat/completions'
 ```
 
-**Default keybinding:** `<C-g><C-g>` in Insert mode accepts the suggestion.
-You can remap it:
+#### Keybinding Customization
+
+The default accept binding is `<C-g><C-g>` in Insert mode. To change it:
 
 ```vim
+" Disable the default binding
+let g:grok_completion_no_map_tab = 1
+
 " Use Tab to accept instead
 imap <silent><expr> <Tab> grok#completion#Accept()
 
-" Or use a Plug mapping
+" Or use the Plug mapping
 imap <Tab> <Plug>(grok-complete-accept)
+```
+
+#### Disabling for Specific Filetypes
+
+```vim
+autocmd FileType markdown let b:grok_completion_enabled = 0
+autocmd FileType text     let b:grok_completion_enabled = 0
+autocmd FileType help     let b:grok_completion_enabled = 0
+```
+
+### Example `.vimrc` (full setup)
+
+```vim
+" ---- grok-cli commands (works with grok login, no API key) ----
+let g:grok_model = 'grok-code-fast-1'
+let g:grok_yolo = 0
+let g:grok_map_prefix = '<leader>g'
+let g:grok_extra_args = '--rules "Be concise"'
+
+" ---- Inline completions (requires xAI API key) ----
+let g:grok_completion_enabled = 1
+" API key loaded from $XAI_API_KEY environment variable
 ```
 
 ## How It Works
 
 - **Async streaming** — Commands like `:GrokAsk`, `:GrokExplain`, etc. use
   `--output-format streaming-json` to stream responses in real-time into a
-  split buffer.
+  split buffer via grok-cli.
 - **Sync mode** — `:GrokGenerate` uses `--output-format json` synchronously
   to insert code directly at your cursor.
 - **Chat sessions** — `:GrokChat` passes `-s <session-id>` to maintain
   multi-turn conversations.
 - **Inline completion** — On each keystroke (debounced), sends the code
-  surrounding your cursor to the xAI chat completions API via `curl`,
-  then renders the suggestion as grey ghost text using Vim's text
-  properties. Press `<C-g><C-g>` to accept.
+  surrounding your cursor to the xAI chat completions API
+  (`api.x.ai/v1/chat/completions`) via async `curl`. The response is
+  rendered as grey ghost text using Vim's text properties (`prop_add`).
+  Press `<C-g><C-g>` to accept and insert the suggestion.
 - **Context-aware** — Code commands automatically include the buffer's
   filetype for language-aware responses.
 - **Syntax highlighting** — Output buffers use filetype `grok` with custom
   highlighting for thinking blocks, chat headers, and code fences.
+
+## Architecture
+
+vim-grok has two independent backends:
+
+| Feature | Backend | Auth | Protocol |
+|---------|---------|------|----------|
+| Ask, Explain, Refactor, Review, Fix, Generate, Chat | **grok-cli** | `grok login` | Streaming NDJSON via `job_start` |
+| Inline code completions | **xAI API** | API key | HTTPS via `curl` |
+
+Both run asynchronously and do not block the editor.
 
 ## Contributing
 
