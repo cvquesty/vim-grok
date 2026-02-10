@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-02-09
+
+### Changed
+- Comprehensive documentation rewrite for inline completion feature
+- README: added step-by-step API key setup (environment variable and vimrc),
+  Quick Start split into grok-cli and completion sections, Insert Mode
+  keybinding table, Architecture table showing dual backends, full example
+  .vimrc
+- doc/grok.txt: added Installation section, expanded Inline Completion
+  with 3-step setup guide, shell-specific export instructions (bash/zsh),
+  How to Use workflow, example .vimrc
+
 ## [0.2.0] - 2026-02-09
 
 ### Added
