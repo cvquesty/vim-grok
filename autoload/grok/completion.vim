@@ -13,8 +13,11 @@ let g:autoloaded_grok_completion = 1
 
 " ---- Highlight & text-property setup -------------------------------------
 let s:hlgroup = 'GrokSuggestion'
-if !has('nvim')
-  if empty(prop_type_get(s:hlgroup))
+if has('nvim')
+  " Neovim uses extmarks — highlight group is enough
+else
+  " Vim: register text property type for ghost text rendering
+  if exists('*prop_type_get') && empty(prop_type_get(s:hlgroup))
     call prop_type_add(s:hlgroup, {'highlight': s:hlgroup})
   endif
 endif
@@ -107,8 +110,8 @@ endfunction
 " Accept the current suggestion (returns keystrokes to insert)
 function! grok#completion#Accept() abort
   if empty(s:current_suggestion) || mode() !~# '^[iR]'
-    " No suggestion — fall through to normal Tab
-    return get(g:, 'grok_completion_tab_fallback', pumvisible() ? "\<C-N>" : "\t")
+    " No suggestion — return the literal keys so they pass through
+    return "\<C-g>\<C-g>"
   endif
   let l:text = s:current_suggestion
   call grok#completion#Clear()
@@ -143,7 +146,14 @@ endfunction
 
 " ---- Ghost text rendering ------------------------------------------------
 function! s:ClearGhostText() abort
-  call prop_remove({'type': s:hlgroup, 'all': v:true})
+  if has('nvim')
+    " Neovim: clear virtual text (extmarks)
+    if exists('s:nvim_ns')
+      call nvim_buf_clear_namespace(0, s:nvim_ns, 0, -1)
+    endif
+  else
+    call prop_remove({'type': s:hlgroup, 'all': v:true})
+  endif
 endfunction
 
 function! s:RenderGhostText(text, lnum, col) abort
@@ -157,25 +167,44 @@ function! s:RenderGhostText(text, lnum, col) abort
     return
   endif
 
-  " First line: inline after cursor
-  call prop_add(a:lnum, a:col, {'type': s:hlgroup, 'text': l:lines[0]})
-
-  " Subsequent lines: below
-  if len(l:lines) > 1
-    for l:i in range(1, len(l:lines) - 1)
-      let l:line = l:lines[l:i]
-      " Convert leading tabs to spaces for display
-      let l:ntabs = 0
-      for l:c in split(l:line, '\zs')
-        if l:c ==# "\t"
-          let l:ntabs += 1
-        else
-          break
-        endif
+  if has('nvim')
+    " Neovim: use extmarks with virtual text
+    if !exists('s:nvim_ns')
+      let s:nvim_ns = nvim_create_namespace('grok_suggestion')
+    endif
+    " First line: inline after cursor (virt_text)
+    let l:opts = {'virt_text': [[l:lines[0], s:hlgroup]], 'virt_text_pos': 'inline'}
+    if len(l:lines) > 1
+      " Additional lines as virtual lines below
+      let l:virt_lines = []
+      for l:i in range(1, len(l:lines) - 1)
+        call add(l:virt_lines, [[l:lines[l:i], s:hlgroup]])
       endfor
-      let l:line = repeat(' ', l:ntabs * shiftwidth()) . strpart(l:line, l:ntabs)
-      call prop_add(a:lnum, 0, {'type': s:hlgroup, 'text_align': 'below', 'text': l:line})
-    endfor
+      let l:opts.virt_lines = l:virt_lines
+    endif
+    call nvim_buf_set_extmark(0, s:nvim_ns, a:lnum - 1, a:col - 1, l:opts)
+  else
+    " Vim: use text properties
+    " First line: inline after cursor
+    call prop_add(a:lnum, a:col, {'type': s:hlgroup, 'text': l:lines[0]})
+
+    " Subsequent lines: below
+    if len(l:lines) > 1
+      for l:i in range(1, len(l:lines) - 1)
+        let l:line = l:lines[l:i]
+        " Convert leading tabs to spaces for display
+        let l:ntabs = 0
+        for l:c in split(l:line, '\zs')
+          if l:c ==# "\t"
+            let l:ntabs += 1
+          else
+            break
+          endif
+        endfor
+        let l:line = repeat(' ', l:ntabs * shiftwidth()) . strpart(l:line, l:ntabs)
+        call prop_add(a:lnum, 0, {'type': s:hlgroup, 'text_align': 'below', 'text': l:line})
+      endfor
+    endif
   endif
 endfunction
 

@@ -10,6 +10,7 @@ if exists('g:loaded_grok_plugin')
   finish
 endif
 let g:loaded_grok_plugin = 1
+let g:grok_plugin_version = '0.3.0'
 
 " Require Vim 8.0+ for job/channel support
 if v:version < 800
@@ -55,52 +56,55 @@ command! -nargs=? GrokSetModel   call grok#set_model(<q-args>)
 command! -nargs=0 GrokStop       call grok#stop()
 
 " ---- Key Mappings (Normal mode) -------------------------------------------
-" All prefixed with <leader>g by default
+" All prefixed with <leader>g by default.
+" Set g:grok_no_mappings = 1 to suppress all default mappings.
 
-" <leader>ga — Ask Grok (prompts for input)
-execute 'nnoremap ' . s:prefix . 'a :GrokAsk '
+if !get(g:, 'grok_no_mappings', 0)
+  " <leader>ga — Ask Grok (prompts for input)
+  execute 'nnoremap ' . s:prefix . 'a :GrokAsk '
 
-" <leader>ge — Explain current buffer
-execute 'nnoremap <silent> ' . s:prefix . 'e :GrokExplain<CR>'
+  " <leader>ge — Explain current buffer
+  execute 'nnoremap <silent> ' . s:prefix . 'e :GrokExplain<CR>'
 
-" <leader>gr — Refactor current buffer
-execute 'nnoremap <silent> ' . s:prefix . 'r :GrokRefactor<CR>'
+  " <leader>gr — Refactor current buffer
+  execute 'nnoremap <silent> ' . s:prefix . 'r :GrokRefactor<CR>'
 
-" <leader>gv — Review current buffer
-execute 'nnoremap <silent> ' . s:prefix . 'v :GrokReview<CR>'
+  " <leader>gv — Review current buffer
+  execute 'nnoremap <silent> ' . s:prefix . 'v :GrokReview<CR>'
 
-" <leader>gf — Fix current buffer
-execute 'nnoremap <silent> ' . s:prefix . 'f :GrokFix<CR>'
+  " <leader>gf — Fix current buffer
+  execute 'nnoremap <silent> ' . s:prefix . 'f :GrokFix<CR>'
 
-" <leader>gg — Generate code (prompts for input)
-execute 'nnoremap ' . s:prefix . 'g :GrokGenerate '
+  " <leader>gg — Generate code (prompts for input)
+  execute 'nnoremap ' . s:prefix . 'g :GrokGenerate '
 
-" <leader>gc — Chat (prompts for input)
-execute 'nnoremap ' . s:prefix . 'c :GrokChat '
+  " <leader>gc — Chat (prompts for input)
+  execute 'nnoremap ' . s:prefix . 'c :GrokChat '
 
-" <leader>gi — Inline question about cursor context
-execute 'nnoremap ' . s:prefix . 'i :GrokInline '
+  " <leader>gi — Inline question about cursor context
+  execute 'nnoremap ' . s:prefix . 'i :GrokInline '
 
-" <leader>gm — List models
-execute 'nnoremap <silent> ' . s:prefix . 'm :GrokModels<CR>'
+  " <leader>gm — List models
+  execute 'nnoremap <silent> ' . s:prefix . 'm :GrokModels<CR>'
 
-" <leader>gs — Stop current request
-execute 'nnoremap <silent> ' . s:prefix . 's :GrokStop<CR>'
+  " <leader>gs — Stop current request
+  execute 'nnoremap <silent> ' . s:prefix . 's :GrokStop<CR>'
 
-" ---- Key Mappings (Visual mode) -------------------------------------------
-" Apply to visual selection
+  " ---- Key Mappings (Visual mode) -----------------------------------------
+  " Apply to visual selection
 
-" <leader>ge — Explain selection
-execute 'xnoremap <silent> ' . s:prefix . 'e :GrokExplain<CR>'
+  " <leader>ge — Explain selection
+  execute 'xnoremap <silent> ' . s:prefix . 'e :GrokExplain<CR>'
 
-" <leader>gr — Refactor selection
-execute 'xnoremap <silent> ' . s:prefix . 'r :GrokRefactor<CR>'
+  " <leader>gr — Refactor selection
+  execute 'xnoremap <silent> ' . s:prefix . 'r :GrokRefactor<CR>'
 
-" <leader>gv — Review selection
-execute 'xnoremap <silent> ' . s:prefix . 'v :GrokReview<CR>'
+  " <leader>gv — Review selection
+  execute 'xnoremap <silent> ' . s:prefix . 'v :GrokReview<CR>'
 
-" <leader>gf — Fix selection
-execute 'xnoremap <silent> ' . s:prefix . 'f :GrokFix<CR>'
+  " <leader>gf — Fix selection
+  execute 'xnoremap <silent> ' . s:prefix . 'f :GrokFix<CR>'
+endif
 
 " ---- Inline Completion (xAI API) -----------------------------------------
 " g:grok_completion_enabled  — Set to 1 to enable (default: 0, opt-in)

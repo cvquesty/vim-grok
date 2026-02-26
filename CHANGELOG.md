@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-02-25
+
+### Changed
+- **Output buffer no longer steals focus**: `:GrokAsk`, `:GrokExplain`, `:GrokReview`, etc. open the response buffer as a split but return focus to the code window immediately. You can keep editing while the response streams in.
+- **`:GrokChat` is now async**: Chat responses stream in real-time instead of blocking the editor. Session ID is captured from the streaming `end` event.
+- **`:GrokGenerate` is now async**: Code generation no longer blocks. Generated code is inserted at the saved cursor position when the response completes, and the staging buffer auto-closes.
+- **Output buffer sizing**: New buffers open at 1/3 screen height (min 8 lines) instead of a half-height split.
+
+### Added
+- **`g:grok_no_mappings`**: Set to `1` to suppress all default key mappings. Commands still work — users can define their own bindings.
+- **`g:grok_plugin_version`**: Version tracking variable (`0.3.0`).
+- **Neovim ghost text support**: Inline completions now work in Neovim using `nvim_buf_set_extmark` with virtual text. Previously only Vim's `prop_add` was supported — Neovim users got no ghost text silently.
+
+### Fixed
+- **Shell injection in `:GrokModels`**: Changed from string `system()` to list form `system([binary, 'models'])` to safely handle binary paths with spaces.
+- **`Accept()` fallback**: When no suggestion is active, `<C-g><C-g>` now passes the literal keys through instead of inserting a Tab character.
+
 ## [0.2.1] - 2026-02-09
 
 ### Changed

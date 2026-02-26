@@ -112,7 +112,10 @@ endfunction
 " ---- Utility: Open or reuse a Grok output buffer --------------------------
 " Uses noautocmd for all window operations to prevent other plugins
 " (airline, gitgutter, codeium, etc.) from interfering during setup.
+" After opening/reusing the buffer, returns focus to the original window
+" so the user can keep editing.
 function! s:open_grok_buffer(name) abort
+  let l:orig_win = winnr()
   let l:bufname = '[Grok] ' . a:name
   let l:existing = s:find_buf_exact(l:bufname)
   if l:existing != -1 && bufloaded(l:existing)
@@ -128,14 +131,19 @@ function! s:open_grok_buffer(name) abort
     setlocal modifiable
     silent %delete _
   else
-    noautocmd execute 'botright new'
+    noautocmd execute 'botright split'
+    noautocmd execute 'resize ' . max([8, &lines / 3])
+    noautocmd execute 'enew'
     noautocmd execute 'file ' . fnameescape(l:bufname)
   endif
   setlocal buftype=nofile bufhidden=hide noswapfile
   setlocal filetype=grok
   setlocal wrap linebreak
   setlocal modifiable
-  return bufnr('%')
+  let l:bufnr = bufnr('%')
+  " Return focus to the original code window
+  noautocmd execute l:orig_win . 'wincmd w'
+  return l:bufnr
 endfunction
 
 " ---- Utility: Show a spinner while job runs --------------------------------
@@ -235,6 +243,8 @@ function! s:on_done() abort
     endif
   endif
   call s:update_buffer(l:ctx.bufnr, l:ctx.output, l:ctx.thought)
+  " If this was a :GrokGenerate request, insert code at the saved cursor
+  call s:try_generate_insert()
   echohl MoreMsg | echo 'Grok response complete.' | echohl None
   let s:grok_job = v:null
 endfunction
@@ -384,6 +394,8 @@ function! grok#fix(line1, line2) abort
 endfunction
 
 " ---- :GrokGenerate <prompt> -----------------------------------------------
+" Generates code and inserts at cursor. Uses async with a dedicated callback
+" that strips markdown fences and inserts below the current line.
 function! grok#generate(prompt) abort
   if empty(a:prompt)
     echoerr 'Usage: :GrokGenerate <prompt>'
@@ -392,18 +404,54 @@ function! grok#generate(prompt) abort
   let l:ft = &filetype
   let l:full_prompt = "Generate " . l:ft . " code for the following request. " .
         \ "Return ONLY the code, no explanations, no markdown fences:\n\n" . a:prompt
-  call s:show_waiting('Grok is generating code')
-  let l:result = s:run_grok_sync(l:full_prompt)
-  if empty(l:result)
+
+  " Store cursor position for insertion after async completion
+  let s:generate_insert_line = line('.')
+  let s:generate_insert_buf = bufnr('%')
+
+  echohl MoreMsg | echon 'Grok: generating code...' | echohl None
+
+  " Use the async path — stream into a hidden buffer, then extract on done
+  let l:bufnr = s:open_grok_buffer('Generate')
+  call setbufline(l:bufnr, 1, ['⏳ Generating...'])
+  call s:run_grok_async(l:full_prompt, l:bufnr)
+endfunction
+
+" Called from s:on_done — if this was a generate request, insert the code
+function! s:try_generate_insert() abort
+  if !exists('s:generate_insert_line')
     return
   endif
-  let l:text = get(l:result, 'text', '')
-  " Strip markdown code fences if present
+  let l:bufname = '[Grok] Generate'
+  let l:bufnr = s:find_buf_exact(l:bufname)
+  if l:bufnr == -1
+    return
+  endif
+
+  let l:lines = getbufline(l:bufnr, 1, '$')
+  let l:text = join(l:lines, "\n")
+
+  " Strip markdown code fences if model wraps output
   let l:text = substitute(l:text, '^```\w*\n', '', '')
   let l:text = substitute(l:text, '\n```\s*$', '', '')
-  let l:lines = split(l:text, "\n")
-  call append(line('.'), l:lines)
-  echo 'Generated ' . len(l:lines) . ' lines.'
+  let l:text = substitute(l:text, '^\n\+', '', '')
+  let l:text = substitute(l:text, '\n\+$', '', '')
+  let l:code_lines = split(l:text, "\n")
+
+  if !empty(l:code_lines)
+    call appendbufline(s:generate_insert_buf, s:generate_insert_line, l:code_lines)
+    echohl MoreMsg | echo 'Generated ' . len(l:code_lines) . ' lines.' | echohl None
+  endif
+
+  " Close the generate buffer (it was just a staging area)
+  let l:winnr = bufwinnr(l:bufnr)
+  if l:winnr != -1
+    noautocmd execute l:winnr . 'wincmd w'
+    noautocmd close
+  endif
+
+  unlet s:generate_insert_line
+  unlet s:generate_insert_buf
 endfunction
 
 " ---- :GrokChat -----------------------------------------------------------
@@ -456,47 +504,8 @@ function! grok#chat(prompt) abort
           \ '⏳ Thinking...'])
   endif
 
-  " Build command
-  let l:cmd = s:base_cmd()
-  call extend(l:cmd, ['-p', a:prompt, '--output-format', 'json'])
-  if !empty(s:chat_session_id)
-    call extend(l:cmd, ['-s', s:chat_session_id])
-  endif
-
-  " Run synchronously for chat (so we capture session ID reliably)
-  let l:raw = system(join(map(copy(l:cmd), 'shellescape(v:val)'), ' '))
-  let l:result = {}
-  try
-    let l:result = json_decode(l:raw)
-  catch
-    let l:result = {'text': 'Error: ' . l:raw}
-  endtry
-
-  let l:text = get(l:result, 'text', 'No response')
-  let l:sid  = get(l:result, 'sessionId', '')
-  if !empty(l:sid)
-    let s:chat_session_id = l:sid
-  endif
-
-  " Replace the "Thinking..." line with the response
-  let l:winnr2 = bufwinnr(l:bufnr)
-  if l:winnr2 != -1
-    noautocmd execute l:winnr2 . 'wincmd w'
-  endif
-  setlocal modifiable
-  " Find and remove the spinner line
-  let l:total = line('$')
-  for l:i in range(l:total, 1, -1)
-    if getline(l:i) =~# '⏳'
-      execute l:i . 'delete _'
-      break
-    endif
-  endfor
-  " Append the response
-  let l:last = line('$')
-  call append(l:last, split(l:text, "\n"))
-  setlocal nomodifiable
-  normal! G
+  " Run async — the streaming callback captures session ID from 'end' event
+  call s:run_grok_async(a:prompt, l:bufnr, 1)
 endfunction
 
 " ---- :GrokChatReset -------------------------------------------------------
@@ -507,12 +516,12 @@ endfunction
 
 " ---- :GrokModels ----------------------------------------------------------
 function! grok#models() abort
-  let l:cmd = s:get_binary() . ' models'
-  let l:raw = system(l:cmd)
+  " Use list form to avoid shell injection if binary path has spaces
+  let l:raw = system([s:get_binary(), 'models'])
   let l:bufnr = s:open_grok_buffer('Models')
-  setlocal modifiable
+  call setbufvar(l:bufnr, '&modifiable', 1)
   call setbufline(l:bufnr, 1, split(l:raw, "\n"))
-  setlocal nomodifiable
+  call setbufvar(l:bufnr, '&modifiable', 0)
 endfunction
 
 " ---- :GrokSetModel <model> ------------------------------------------------
