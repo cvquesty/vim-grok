@@ -131,6 +131,21 @@ g:grok_map_prefix ~
     let g:grok_map_prefix = '<leader>k'
 <
 
+                                                      *g:grok_no_mappings*
+g:grok_no_mappings ~
+    Set to 1 to suppress all default key mappings. Commands are still
+    available — you can define your own bindings. Default: 0
+>
+    let g:grok_no_mappings = 1
+<
+
+                                                  *g:grok_plugin_version*
+g:grok_plugin_version ~
+    Read-only variable containing the current plugin version string.
+>
+    :echo g:grok_plugin_version
+<
+
                                                 *g:grok_completion_enabled*
 g:grok_completion_enabled ~
     Enable inline code completions via the xAI API. Default: 0 (opt-in).

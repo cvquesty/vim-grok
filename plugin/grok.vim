@@ -10,7 +10,7 @@ if exists('g:loaded_grok_plugin')
   finish
 endif
 let g:loaded_grok_plugin = 1
-let g:grok_plugin_version = '0.3.0'
+let g:grok_plugin_version = '0.3.1'
 
 " Require Vim 8.0+ for job/channel support
 if v:version < 800

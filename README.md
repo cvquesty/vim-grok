@@ -1,6 +1,6 @@
 # vim-grok
 
-![Version](https://img.shields.io/badge/version-0.3.0-blue)
+![Version](https://img.shields.io/badge/version-0.3.1-blue)
 ![Vim](https://img.shields.io/badge/vim-8.0%2B-green)
 ![Neovim](https://img.shields.io/badge/neovim-0.5%2B-green)
 ![License](https://img.shields.io/badge/license-MIT-blue)

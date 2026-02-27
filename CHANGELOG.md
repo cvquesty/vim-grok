@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-02-25
+
+### Fixed
+- **Help file**: Added missing documentation for `g:grok_no_mappings` and `g:grok_plugin_version` options introduced in v0.3.0. The `:help grok` docs now match all available configuration options.
+
 ## [0.3.0] - 2026-02-25
 
 ### Changed
